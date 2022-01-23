@@ -7,106 +7,140 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Scanner;
 import java.util.Set;
 
 public class ConwaysGame {
 
-    private int gridSize;
+    public static final String NEXT = "n";
+    public static final String QUIT = "q";
+
     public Grid gameGrid;
 
-    public ConwaysGame(int gridSize) {
-        this.gridSize = gridSize;
-        List<String> initList = Grid.generateInitList(gridSize);
-        gameGrid = new Grid(gridSize, initList);
+    public ConwaysGame(int xGridSize, int yGridSize) {
+        List<String> initList =
+                Grid.generateInitList(
+                        Grid.getValidGridSize(xGridSize),
+                        Grid.getValidGridSize(yGridSize));
+        gameGrid = new Grid(xGridSize, yGridSize, initList);
     }
 
     public static void main(String[] args) {
-
-        ConwaysGame game = new ConwaysGame(5);
-
-        System.out.println("\nWelcome to Conway's Game. Here is the starting grid:\n");
-        game.gameGrid.print();
         try (Scanner scanner = new Scanner(System.in)) {
-            while (true) {
-                System.out.print("Please type 'next' to go to the next stage, or type 'quit' or 'exit' to quit: ");
-
-                String result = scanner.next();
-                if (result.equalsIgnoreCase("quit") || result.equalsIgnoreCase("exit")) {
-                    System.exit(0);
-                }
-
-                if (!result.equalsIgnoreCase("next")) {
-                    System.out.print(
-                            String.format(
-                                    "\nInvalid command '%s' - must be one of 'next', 'quit' or 'exit'\n", result));
-                    continue;
-                }
-
-                game.gameGrid.incrementStage();
-                System.out.println("Here is the new grid state:\n");
-                game.gameGrid.print();
-
-                if (game.gameGrid.allCellsAreDead()) {
-                    System.out.println("All cells have died. The game is over.");
-                    System.exit(0);
-                }
-
-            }
-        } catch (NoSuchElementException | IllegalStateException e) {
-            // Do nothing
+            ConwaysGame game = initializeGame(scanner);
+            processGameInput(game, scanner);
+        } catch (NumberFormatException | NoSuchElementException | IllegalStateException e) {
+            System.err.println("Unexpected exception: " + e);
+            e.printStackTrace();
         }
     }
 
-    class Grid {
-        public static int MINIMUM_GRID_SIZE = 3;
-        public static int DEFAULT_GRID_SIZE = 4;
-        public static int MAXIMUM_GRID_SIZE = 10;
+    private static ConwaysGame initializeGame(Scanner scanner)
+            throws NumberFormatException {
+        System.out.print("\nPlease enter the number of columns (X-axis) for the grid: ");
+        int xInput = scanner.nextInt();
+        System.out.print("Please enter the number of rows (Y-axis) for the grid: ");
+        int yInput = scanner.nextInt();
 
-        private int size;
+        ConwaysGame game = new ConwaysGame(xInput, yInput);
+        System.out.println("\nSuccessfully initialized the starting grid:\n");
+        game.gameGrid.print();
+        return game;
+    }
+
+    private static void processGameInput(ConwaysGame game, Scanner scanner)
+            throws NoSuchElementException, IllegalStateException {
+        while (true) {
+            System.out.printf("Please type '%s' to go to the next stage, or type '%s' to exit: ", NEXT, QUIT);
+            String result = scanner.next();
+            if (result.equalsIgnoreCase(QUIT)) {
+                System.exit(0);
+            }
+
+            if (!result.equalsIgnoreCase(NEXT)) {
+                System.out.printf("\nInvalid command '%s' - must be one of '%s' or '%s'\n", result, NEXT, QUIT);
+                continue;
+            }
+
+            game.gameGrid.incrementStage();
+            System.out.println("Here is the new grid state:\n");
+            game.gameGrid.print();
+
+            if (game.gameGrid.allCellsAreDead()) {
+                System.out.println("All cells have died. The game is over.");
+                System.exit(0);
+            }
+        }
+    }
+
+    static class Grid {
+        public static final int MINIMUM_GRID_SIZE = 3;
+        public static final int DEFAULT_GRID_SIZE = 5;
+        public static final int MAXIMUM_GRID_SIZE = 20;
+        public static final String SEPARATOR = " ";
+
+        private final int xSize;
+        private final int ySize;
+
         private int stage = 0;
-        private Cell[][] cellMatrix;
-        private Map<GridCoordinate, Cell> cellDictionary = new HashMap<>();
 
-        private static String SEPARATOR = " ";
+        // The naive initial solution to this problem of course uses a matrix directly, but using a (Hash)Map allows us
+        // to get O(1) insertion and lookup performance - so long as we can avoid ever iterating through the map's keys
+        // or values. The key to avoiding that iteration is recognizing that the relationships between a cell and its
+        // neighbours are fixed - and can thus also be looked up in constant time upon each iteration.
+        //
+        // Therefore, the overall performance of this solution is O(N), where N is the _number_ of cells in the grid
+        // (i.e. xGridSize * yGridSize), as you need to iterate over each cell to update its state at each stage.
+        private final Map<GridCoordinates, Cell> cellMap = new HashMap<>();
 
-        public Grid(int size, List<String> inputList) {
-            this.size = size;
-            cellMatrix = new Cell[size][size];
+        // The matrix is still useful for displaying the grid contents though, so we populate it as well.
+        private final Cell[][] cellMatrix;
 
-            int lineCount = 0;
-            System.out.println("Number of lines is: " + inputList.size());
+        public Grid(int xSize, int ySize, List<String> inputList) {
+            this.xSize = Grid.getValidGridSize(xSize);
+            this.ySize = Grid.getValidGridSize(ySize);
+            cellMatrix = new Cell[this.xSize][this.ySize];
+
+            int yLineCount = 0;
             for (String line : inputList) {
                 try {
                     String[] cellValues = line.split(SEPARATOR);
-                    for (int index = 0; index < cellValues.length; index++) {
-                        int value = Integer.parseInt(cellValues[index]);
-                        Cell cell = new Cell(index, lineCount, value);
-                        cellMatrix[index][lineCount] = cell;
-                        cellDictionary.put(cell.coordinate, cell);
+                    for (int xIndex = 0; xIndex < cellValues.length; xIndex++) {
+                        int value = Integer.parseInt(cellValues[xIndex]);
+                        Cell cell = new Cell(xIndex, yLineCount, value);
+                        cellMatrix[xIndex][yLineCount] = cell;
+                        cellMap.put(cell.coordinates, cell);
                     }
                 } catch (NumberFormatException e) {
-                    // Do nothing
+                    // Do nothing - the inputList was auto-generated. If Random isn't generating valid integers, we've
+                    // got bigger problems :-)
                 }
-                lineCount++;
+                yLineCount++;
             }
             buildAdjacencies();
         }
 
         public void print() {
-            StringBuilder output = new StringBuilder();
-            for (int yPosition = 0; yPosition < size; yPosition++) {
-                for (int xPosition = 0; xPosition < size; xPosition++) {
-                    output.append(cellMatrix[xPosition][yPosition].state + ((xPosition < size - 1) ? " " : "\n"));
+            StringBuilder view = new StringBuilder();
+            for (int yPosition = 0; yPosition < ySize; yPosition++) {
+                for (int xPosition = 0; xPosition < xSize; xPosition++) {
+                    view.append(cellMatrix[xPosition][yPosition].state).append(xPosition < xSize - 1 ? " " : "\n");
                 }
             }
             System.out.println("Stage is: " + stage);
-            System.out.println(output.toString());
+            System.out.println(view);
+        }
+
+        public void buildAdjacencies() {
+            for (Cell cell : cellMap.values()) {
+                cell.findAndRegisterNeighbours(cellMap, xSize, ySize);
+            }
         }
 
         public boolean allCellsAreDead() {
-            for (Cell cell : cellDictionary.values()) {
+            for (Cell cell : cellMap.values()) {
                 if (cell.state == Cell.ALIVE) {
                     return false;
                 }
@@ -119,34 +153,27 @@ public class ConwaysGame {
             updateCellStates();
         }
 
-        public void buildAdjacencies() {
-            for (Cell cell : cellDictionary.values()) {
-                cell.findAndRegisterNeighbours(cellDictionary, size);
-            }
-        }
-
         public void updateCellStates() {
-            for (Cell currentCell : cellDictionary.values()) {
+            for (Cell currentCell : cellMap.values()) {
                 currentCell.advanceState();
             }
 
-            for (Cell currentCell : cellDictionary.values()) {
+            for (Cell currentCell : cellMap.values()) {
                 currentCell.liveOrDie();
             }
         }
 
-        public static List<String> generateInitList(int gridSize) {
-            if (gridSize < MINIMUM_GRID_SIZE || gridSize > MAXIMUM_GRID_SIZE) {
-                gridSize = DEFAULT_GRID_SIZE;
-            }
+        public static List<String> generateInitList(int xGridSize, int yGridSize) {
+            xGridSize = Grid.getValidGridSize(xGridSize);
+            yGridSize = Grid.getValidGridSize(yGridSize);
 
             Random random = new Random();
             List<String> initList = new ArrayList<>();
             StringBuilder output = new StringBuilder();
-            for (int yPosition = 0; yPosition < gridSize; yPosition++) {
-                for (int xPosition = 0; xPosition < gridSize; xPosition++) {
+            for (int yPosition = 0; yPosition < yGridSize; yPosition++) {
+                for (int xPosition = 0; xPosition < xGridSize; xPosition++) {
                     int cellState = random.nextInt(2);
-                    output.append(cellState + ((xPosition < gridSize - 1) ? " " : ""));
+                    output.append(cellState).append(xPosition < (xGridSize - 1) ? " " : "");
                 }
                 String line = output.toString();
                 initList.add(line);
@@ -155,42 +182,44 @@ public class ConwaysGame {
 
             return initList;
         }
+
+        private static int getValidGridSize(int gridSize) {
+            return gridSize >= MINIMUM_GRID_SIZE && gridSize <= MAXIMUM_GRID_SIZE ? gridSize : DEFAULT_GRID_SIZE;
+        }
     }
 
-    class Cell {
-        public static int DEAD = 0;
-        public static int ALIVE = 1;
+    static class Cell {
+        public static final int DEAD = 0;
+        public static final int ALIVE = 1;
 
         public int state;
         public int previousState;
-        public GridCoordinate coordinate;
-        private Set<Cell> neighbours = new LinkedHashSet<>();
+        public GridCoordinates coordinates;
+        private final Set<Cell> neighbours = new LinkedHashSet<>();
 
         public Cell(int x, int y, int state) {
-            coordinate = new GridCoordinate(x, y);
+            coordinates = new GridCoordinates(x, y);
             this.state = state;
             this.previousState = state;
         }
 
-        public void findAndRegisterNeighbours(Map<GridCoordinate, Cell> dictionary, int gridSize) {
+        public void findAndRegisterNeighbours(Map<GridCoordinates, Cell> coordinatesMap, int gridXSize, int gridYSize) {
             Cell neighbour;
-            for (GridCoordinate neighbourCoordinate : coordinate.getValidNeighbours(gridSize)) {
-                neighbour = dictionary.get(neighbourCoordinate);
+            for (GridCoordinates neighbourCoordinates : coordinates.getValidNeighbours(gridXSize, gridYSize)) {
+                neighbour = coordinatesMap.get(neighbourCoordinates);
                 if (neighbour != null) {
                     neighbours.add(neighbour);
                 }
             }
         }
 
-        public int advanceState() {
-            int oldPreviousState = previousState;
+        public void advanceState() {
             previousState = state;
-            return oldPreviousState;
         }
 
         // Reads the previous state value for all neighbours, which are only updated when their state is advanced by the
         // controller (i.e. Grid).
-        public int liveOrDie() {
+        public void liveOrDie() {
             int liveNeighbours = 0;
             for (Cell neighbour : neighbours) {
                 if (neighbour.previousState == ALIVE) {
@@ -205,60 +234,72 @@ public class ConwaysGame {
             } else if (liveNeighbours == 3 && state == DEAD) {
                 state = ALIVE;
             }
-            return state;
         }
     }
 
-    public class GridCoordinate {
+    // NOTE: Pulling the X and Y coordinate fields back into the Cell class, and using a string tuple as the lookup key
+    //       into the cellMap instead, would be a meaningful memory optimization for large values of N (i.e. xGridSize
+    //       * yGridSize). This implementation separate concerns better though (aside from the annoying need to pass
+    //       xGridSize and yGridSize via the Cell's interface down to its contained GridCoordinates).
+    static class GridCoordinates {
         int xPosition;
         int yPosition;
 
-        public GridCoordinate(int xPos, int yPos) {
+        public GridCoordinates(int xPos, int yPos) {
             xPosition = xPos;
             yPosition = yPos;
         }
 
-        public boolean equals(GridCoordinate otherCoordinate) {
-            if (otherCoordinate == null) {
+        // This method isn't currently used... but I like the implementation enough to want it in the commit history :-)
+        @SuppressWarnings("unused")
+        public boolean isNeighbour(GridCoordinates coordinates) {
+            if (coordinates == null || this.equals(coordinates)) {
                 return false;
             }
-            if (otherCoordinate == this) {
-                return true;
-            }
-            if (this.xPosition == otherCoordinate.xPosition && this.yPosition == otherCoordinate.yPosition) {
-                return true;
-            }
-            return false;
+            return (coordinates.xPosition - this.xPosition < 2 && coordinates.xPosition - this.xPosition > -2) &&
+                    (coordinates.yPosition - this.xPosition < 2 && coordinates.yPosition - this.yPosition > -2);
         }
 
-        public boolean isNeighbour(GridCoordinate coordinate) {
-            if (coordinate == null) {
-                return false;
-            }
-            if (coordinate.equals(this)) {
-                return false;
-            }
-            if ((coordinate.xPosition - this.xPosition < 2 && coordinate.xPosition - this.xPosition > -2) &&
-                    (coordinate.yPosition - this.xPosition < 2 && coordinate.yPosition - this.yPosition > -2)) {
-                return true;
-            }
-            return false;
-        }
-
-        public Set<GridCoordinate> getValidNeighbours(int gridSize) {
-            Set<GridCoordinate> neighbourList = new HashSet<>();
+        // This method is one-half of the key to this entire implementation. If we tell a GridCoordinates object the
+        // boundaries of the grid that it's a part of, then it can always construct the set of valid neighbour
+        // coordinates in constant time, as there are always no fewer than three neighbours (for corner coordinates),
+        // and no more than eight (for center coordinates).
+        public Set<GridCoordinates> getValidNeighbours(int gridXSize, int gridYSize) {
+            Set<GridCoordinates> neighbourList = new HashSet<>();
             for (int x = xPosition - 1; x < xPosition + 2; x++) {
                 for (int y = yPosition - 1; y < yPosition + 2; y++) {
                     if (x == xPosition && y == yPosition) {
                         continue;
                     }
-                    if (x < 0 || y < 0 || x > gridSize - 1 || y > gridSize - 1) {
+                    if (x < 0 || y < 0 || x > gridXSize - 1 || y > gridYSize - 1) {
                         continue;
                     }
-                    neighbourList.add(new GridCoordinate(x, y));
+                    neighbourList.add(new GridCoordinates(x, y));
                 }
             }
             return neighbourList;
+        }
+
+        public String toString() {
+            return "X coordinate: " + xPosition + ", Y coordinate: " + yPosition;
+        }
+
+        @Override
+        public boolean equals(Object object) {
+            if (this == object) {
+                return true;
+            }
+
+            if (object == null || getClass() != object.getClass()) {
+                return false;
+            }
+            GridCoordinates that = (GridCoordinates) object;
+            return xPosition == that.xPosition && yPosition == that.yPosition;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(xPosition, yPosition);
         }
     }
 }
