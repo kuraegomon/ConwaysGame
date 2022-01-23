@@ -239,7 +239,7 @@ public class ConwaysGame {
 
     // NOTE: Pulling the X and Y coordinate fields back into the Cell class, and using a string tuple as the lookup key
     //       into the cellMap instead, would be a meaningful memory optimization for large values of N (i.e. xGridSize
-    //       * yGridSize). This implementation separate concerns better though (aside from the annoying need to pass
+    //       * yGridSize). This implementation separates concerns better though (aside from the annoying need to pass
     //       xGridSize and yGridSize via the Cell's interface down to its contained GridCoordinates).
     static class GridCoordinates {
         int xPosition;
@@ -248,16 +248,6 @@ public class ConwaysGame {
         public GridCoordinates(int xPos, int yPos) {
             xPosition = xPos;
             yPosition = yPos;
-        }
-
-        // This method isn't currently used... but I like the implementation enough to want it in the commit history :-)
-        @SuppressWarnings("unused")
-        public boolean isNeighbour(GridCoordinates coordinates) {
-            if (coordinates == null || this.equals(coordinates)) {
-                return false;
-            }
-            return (coordinates.xPosition - this.xPosition < 2 && coordinates.xPosition - this.xPosition > -2) &&
-                    (coordinates.yPosition - this.xPosition < 2 && coordinates.yPosition - this.yPosition > -2);
         }
 
         // This method is one-half of the key to this entire implementation. If we tell a GridCoordinates object the
