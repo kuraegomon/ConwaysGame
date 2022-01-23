@@ -183,7 +183,7 @@ public class ConwaysGame {
             return initList;
         }
 
-        private static int getValidGridSize(int gridSize) {
+        public static int getValidGridSize(int gridSize) {
             return gridSize >= MINIMUM_GRID_SIZE && gridSize <= MAXIMUM_GRID_SIZE ? gridSize : DEFAULT_GRID_SIZE;
         }
     }
@@ -192,10 +192,11 @@ public class ConwaysGame {
         public static final int DEAD = 0;
         public static final int ALIVE = 1;
 
-        public int state;
-        public int previousState;
-        public GridCoordinates coordinates;
+        private final GridCoordinates coordinates;
         private final Set<Cell> neighbours = new LinkedHashSet<>();
+
+        private int state;
+        private int previousState;
 
         public Cell(int x, int y, int state) {
             coordinates = new GridCoordinates(x, y);
@@ -242,8 +243,8 @@ public class ConwaysGame {
     //       * yGridSize). This implementation separates concerns better though (aside from the annoying need to pass
     //       xGridSize and yGridSize via the Cell's interface down to its contained GridCoordinates).
     static class GridCoordinates {
-        int xPosition;
-        int yPosition;
+        private final int xPosition;
+        private final int yPosition;
 
         public GridCoordinates(int xPos, int yPos) {
             xPosition = xPos;
@@ -270,10 +271,12 @@ public class ConwaysGame {
             return neighbourList;
         }
 
+        @Override
         public String toString() {
             return "X coordinate: " + xPosition + ", Y coordinate: " + yPosition;
         }
 
+        // Since this class is being used as a key to a map, we really to implement equals() and hashCode()
         @Override
         public boolean equals(Object object) {
             if (this == object) {
